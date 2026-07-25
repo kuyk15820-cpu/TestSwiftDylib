@@ -50,12 +50,8 @@ jobs:
       - name: prepare build directory
         run: |
           mkdir -p build
-          # ดึงไฟล์ .tipa หรือ .ipa จากโฟลเดอร์ packages มาเก็บไว้ที่ build/DylibTester.tipa
-          if [ -f packages/*.tipa ]; then
-            cp packages/*.tipa build/DylibTester.tipa
-          else
-            cp packages/*.ipa build/DylibTester.tipa
-          fi
+          # ดึงไฟล์แพ็กเกจทุกนามสกุล (.tipa / .ipa) จากโฟลเดอร์ packages มาเก็บไว้ที่ build/DylibTester.tipa
+          cp packages/*.* build/DylibTester.tipa
 
       - name: upload artifact (PR only)
         if: github.event_name == 'pull_request'
