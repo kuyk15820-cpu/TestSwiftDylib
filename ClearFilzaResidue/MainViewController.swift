@@ -12,7 +12,7 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
         
         title = "Dylib Tester"
         
-        // รองรับระบบสีทั้ง iOS 12 และ iOS 13+
+        // รองรับการแสดงผลสี Background ทั้ง iOS 12 และ iOS 13+
         if #available(iOS 13.0, *) {
             view.backgroundColor = .systemBackground
         } else {
@@ -83,17 +83,19 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let selectedURL = urls.first else { return }
         
-        // คัดลอกไฟล์มาไว้ใน tmp Directory ของแอปเพื่อเลี่ยง Sandbox / mmap restriction
-        if let localDylibURL = copyToTmp(sourceURL: selectedURL) {
+        // คัดลอกไฟล์ไปยัง /tmp ของระบบส่วนกลาง (อยู่นอก Sandbox Container)
+        if let localDylibURL = copyToGlobalTmp(sourceURL: selectedURL) {
             injectDylib(at: localDylibURL.path)
         }
     }
 
-    // MARK: - Helper: Copy to Temporary Directory
-    private func copyToTmp(sourceURL: URL) -> URL? {
+    // MARK: - Helper: Copy to Global System /tmp Directory
+    private func copyToGlobalTmp(sourceURL: URL) -> URL? {
         let fileManager = FileManager.default
-        let tmpURL = fileManager.temporaryDirectory
-        let destinationURL = tmpURL.appendingPathComponent(sourceURL.lastPathComponent)
+        
+        // กำหนด Path ชี้ไปที่ /tmp ของระบบโดยตรงเพื่อป้องกัน Sandbox mmap restriction
+        let globalTmpURL = URL(fileURLWithPath: "/tmp")
+        let destinationURL = globalTmpURL.appendingPathComponent(sourceURL.lastPathComponent)
         
         do {
             if fileManager.fileExists(atPath: destinationURL.path) {
@@ -102,7 +104,7 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
             try fileManager.copyItem(at: sourceURL, to: destinationURL)
             return destinationURL
         } catch {
-            showAlertDialog(message: "คัดลอกไฟล์ไม่สำเร็จ: \(error.localizedDescription)")
+            showAlertDialog(message: "คัดลอกไฟล์ไปยัง /tmp ไม่สำเร็จ: \(error.localizedDescription)")
             return nil
         }
     }
