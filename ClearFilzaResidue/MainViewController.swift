@@ -1,4 +1,5 @@
 import UIKit
+import MobileCoreServices
 import UniformTypeIdentifiers
 
 class MainViewController: UIViewController, UIDocumentPickerDelegate {
@@ -10,7 +11,13 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
         super.viewDidLoad()
         
         title = "Dylib Tester"
-        view.backgroundColor = .systemBackground
+        
+        // รองรับระบบสีทั้ง iOS 12 และ iOS 13+
+        if #available(iOS 13.0, *) {
+            view.backgroundColor = .systemBackground
+        } else {
+            view.backgroundColor = .white
+        }
 
         setupUI()
     }
@@ -21,7 +28,13 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.font = .systemFont(ofSize: 14, weight: .regular)
-        statusLabel.textColor = .secondaryLabel
+        
+        if #available(iOS 13.0, *) {
+            statusLabel.textColor = .secondaryLabel
+        } else {
+            statusLabel.textColor = .gray
+        }
+        
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusLabel)
 
@@ -51,29 +64,36 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
 
     // MARK: - Action: Open Document Picker
     @objc private func selectDylibTapped() {
-        let dylibType = UTType(filenameExtension: "dylib") ?? .data
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [dylibType], asCopy: true)
-        picker.delegate = self
-        picker.allowsMultipleSelection = false
-        present(picker, animated: true)
+        if #available(iOS 14.0, *) {
+            let dylibType = UTType(filenameExtension: "dylib") ?? .data
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [dylibType], asCopy: true)
+            picker.delegate = self
+            picker.allowsMultipleSelection = false
+            present(picker, animated: true)
+        } else {
+            let types: [String] = [kUTTypeData as String, kUTTypeItem as String]
+            let picker = UIDocumentPickerViewController(documentTypes: types, in: .import)
+            picker.delegate = self
+            picker.allowsMultipleSelection = false
+            present(picker, animated: true)
+        }
     }
 
     // MARK: - UIDocumentPickerDelegate
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let selectedURL = urls.first else { return }
         
-        // คัดลอกไฟล์มาไว้ใน Documents ของแอปก่อนสั่ง dlopen
-        if let localDylibURL = copyToDocuments(sourceURL: selectedURL) {
+        // คัดลอกไฟล์มาไว้ใน tmp Directory ของแอปเพื่อเลี่ยง Sandbox / mmap restriction
+        if let localDylibURL = copyToTmp(sourceURL: selectedURL) {
             injectDylib(at: localDylibURL.path)
         }
     }
 
-    // MARK: - Helper: Copy to Documents Directory
-    private func copyToDocuments(sourceURL: URL) -> URL? {
+    // MARK: - Helper: Copy to Temporary Directory
+    private func copyToTmp(sourceURL: URL) -> URL? {
         let fileManager = FileManager.default
-        guard let docsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
-        
-        let destinationURL = docsURL.appendingPathComponent(sourceURL.lastPathComponent)
+        let tmpURL = fileManager.temporaryDirectory
+        let destinationURL = tmpURL.appendingPathComponent(sourceURL.lastPathComponent)
         
         do {
             if fileManager.fileExists(atPath: destinationURL.path) {
@@ -103,9 +123,6 @@ class MainViewController: UIViewController, UIDocumentPickerDelegate {
             statusLabel.textColor = .systemGreen
             statusLabel.text = "[+] โหลด Dylib เข้า Memory สำเร็จ!\nPath: \(path)"
             showAlertDialog(message: "โหลด .dylib สำเร็จแล้ว!")
-            
-            // หมายเหตุ: หาก dylib มี Constructor (เช่น __attribute__((constructor))) 
-            // โค้ดใน dylib จะทำงานอัตโนมัติทันทีที่ dlopen สำเร็จ
         }
     }
 
